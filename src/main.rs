@@ -13,7 +13,6 @@ use juniper_axum::{extract::JuniperRequest, graphiql, response::JuniperResponse}
 use tempdir::TempDir;
 use tokio::{fs, net::TcpListener};
 use tower_http::services::ServeDir;
-use url::Url;
 use uuid::Uuid;
 
 const WAV_FILES_URL_PATH_PREFIX: &'static str = "/wav_files";
@@ -26,13 +25,8 @@ fn wav_file_fs_path(temp_dir: &TempDir, uuid: Uuid) -> PathBuf {
     temp_dir.as_ref().join(&wav_file_name(uuid))
 }
 
-fn wav_file_url_path(uuid: Uuid) -> Url {
-    Url::parse(&format!(
-        "{}/{}",
-        WAV_FILES_URL_PATH_PREFIX,
-        wav_file_name(uuid)
-    ))
-    .unwrap()
+fn wav_file_url_path(uuid: Uuid) -> String {
+    format!("{}/{}", WAV_FILES_URL_PATH_PREFIX, wav_file_name(uuid))
 }
 
 #[derive(Clone)]
@@ -54,7 +48,7 @@ struct Query;
 #[graphql_object]
 #[graphql(context = Context)]
 impl Query {
-    async fn wav_file_url(context: &Context, uuid: Uuid) -> Option<Url> {
+    async fn wav_file_url(context: &Context, uuid: Uuid) -> Option<String> {
         let wav_file_fs_path = wav_file_fs_path(&context.temp_dir, uuid);
 
         fs::try_exists(&wav_file_fs_path)
@@ -77,7 +71,7 @@ async fn custom_graphql(
 async fn create_dummy_wav_file(temp_dir: &Path) {
     fs::copy(
         "/Users/jrosse/prj/frequency-adder-frontend/public/M1F1-float32WE-AFsp.wav",
-        temp_dir.join("M1F1-float32WE-AFsp.wav"),
+        temp_dir.join("A52691A1-64AA-40C5-AEA8-9FD8C67230C4.wav"),
     )
     .await
     .unwrap();
