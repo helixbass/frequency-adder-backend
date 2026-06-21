@@ -12,7 +12,10 @@ use juniper::{graphql_object, EmptyMutation, EmptySubscription, RootNode};
 use juniper_axum::{extract::JuniperRequest, graphiql, response::JuniperResponse};
 use tempdir::TempDir;
 use tokio::{fs, net::TcpListener};
-use tower_http::services::ServeDir;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    services::ServeDir,
+};
 use uuid::Uuid;
 
 const WAV_FILES_URL_PATH_PREFIX: &'static str = "/wav_files";
@@ -95,7 +98,14 @@ async fn main() {
         )
         .route("/graphiql", get(graphiql("/graphql", None)))
         .layer(Extension(Arc::new(schema)))
-        .layer(Extension(context));
+        .layer(Extension(context))
+        .layer(
+            CorsLayer::new()
+                // TODO: restrict this or whatever
+                .allow_origin(Any)
+                .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+                .allow_headers([axum::http::header::CONTENT_TYPE]),
+        );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
