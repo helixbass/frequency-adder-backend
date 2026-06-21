@@ -9,7 +9,7 @@ use axum::{
     Extension, Router,
 };
 use juniper::{graphql_object, EmptyMutation, EmptySubscription, RootNode};
-use juniper_axum::{graphiql, graphql};
+use juniper_axum::{extract::JuniperRequest, graphiql, response::JuniperResponse};
 use tempdir::TempDir;
 use tokio::{fs, net::TcpListener};
 use tower_http::services::ServeDir;
@@ -35,13 +35,27 @@ fn wav_file_url_path(uuid: Uuid) -> Url {
     .unwrap()
 }
 
+#[derive(Clone)]
+struct Context {
+    pub temp_dir: Arc<TempDir>,
+}
+
+impl Context {
+    fn new(temp_dir: Arc<TempDir>) -> Self {
+        Self { temp_dir }
+    }
+}
+
+impl juniper::Context for Context {}
+
 #[derive(Copy, Clone, Debug)]
 struct Query;
 
 #[graphql_object]
+#[graphql(context = Context)]
 impl Query {
-    async fn wav_file_url(uuid: Uuid) -> Option<Url> {
-        let wav_file_fs_path = wav_file_fs_path(uuid);
+    async fn wav_file_url(context: &Context, uuid: Uuid) -> Option<Url> {
+        let wav_file_fs_path = wav_file_fs_path(&context.temp_dir, uuid);
 
         fs::try_exists(&wav_file_fs_path)
             .await
@@ -50,25 +64,33 @@ impl Query {
     }
 }
 
-type Schema = RootNode<Query, EmptyMutation, EmptySubscription>;
+type Schema = RootNode<Query, EmptyMutation<Context>, EmptySubscription<Context>>;
+
+async fn custom_graphql(
+    Extension(schema): Extension<Arc<Schema>>,
+    Extension(context): Extension<Context>,
+    JuniperRequest(request): JuniperRequest,
+) -> JuniperResponse {
+    JuniperResponse(request.execute(&*schema, &context).await)
+}
 
 #[tokio::main]
 async fn main() {
     let schema = Schema::new(Query, EmptyMutation::new(), EmptySubscription::new());
 
-    let temp_dir = TempDir::new("wav_files").expect("couldn't create temp dir");
+    let temp_dir = Arc::new(TempDir::new("wav_files").expect("couldn't create temp dir"));
+
+    let context = Context::new(temp_dir.clone());
 
     let app = Router::new()
-        .nest_service(WAV_FILES_URL_PATH_PREFIX, ServeDir::new(&temp_dir))
+        .nest_service(WAV_FILES_URL_PATH_PREFIX, ServeDir::new(&*temp_dir))
         .route(
             "/graphql",
-            on(
-                MethodFilter::GET.or(MethodFilter::POST),
-                graphql::<Arc<Schema>>,
-            ),
+            on(MethodFilter::GET.or(MethodFilter::POST), custom_graphql),
         )
         .route("/graphiql", get(graphiql("/graphql", None)))
-        .layer(Extension(Arc::new(schema)));
+        .layer(Extension(Arc::new(schema)))
+        .layer(Extension(context));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
 
