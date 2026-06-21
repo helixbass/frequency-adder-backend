@@ -1,7 +1,7 @@
 // https://github.com/graphql-rust/juniper/blob/juniper_axum-v0.3.0/juniper_axum/examples/simple.rs
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::{
@@ -74,6 +74,15 @@ async fn custom_graphql(
     JuniperResponse(request.execute(&*schema, &context).await)
 }
 
+async fn create_dummy_wav_file(temp_dir: &Path) {
+    fs::copy(
+        "/Users/jrosse/prj/frequency-adder-frontend/public/M1F1-float32WE-AFsp.wav",
+        temp_dir.join("M1F1-float32WE-AFsp.wav"),
+    )
+    .await
+    .unwrap();
+}
+
 #[tokio::main]
 async fn main() {
     let schema = Schema::new(Query, EmptyMutation::new(), EmptySubscription::new());
@@ -81,6 +90,8 @@ async fn main() {
     let temp_dir = Arc::new(TempDir::new("wav_files").expect("couldn't create temp dir"));
 
     let context = Context::new(temp_dir.clone());
+
+    create_dummy_wav_file((*temp_dir).as_ref()).await;
 
     let app = Router::new()
         .nest_service(WAV_FILES_URL_PATH_PREFIX, ServeDir::new(&*temp_dir))
