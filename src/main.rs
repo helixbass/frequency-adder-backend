@@ -70,7 +70,7 @@ async fn custom_graphql(
 
 async fn create_dummy_wav_file(temp_dir: &Path) {
     fs::copy(
-        "/Users/jrosse/prj/frequency-adder-frontend/public/M1F1-float32WE-AFsp.wav",
+        "/Users/jrosse/Downloads/M1F1-float32WE-AFsp.wav",
         temp_dir.join("A52691A1-64AA-40C5-AEA8-9FD8C67230C4.wav"),
     )
     .await
