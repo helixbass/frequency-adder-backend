@@ -1,7 +1,6 @@
 // https://github.com/graphql-rust/juniper/blob/juniper_axum-v0.3.0/juniper_axum/examples/simple.rs
 
 use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use axum::{
@@ -18,19 +17,8 @@ use tower_http::{
 };
 use uuid::Uuid;
 
-const WAV_FILES_URL_PATH_PREFIX: &'static str = "/wav_files";
-
-fn wav_file_name(uuid: Uuid) -> String {
-    format!("{}.wav", uuid)
-}
-
-fn wav_file_fs_path(temp_dir: &TempDir, uuid: Uuid) -> PathBuf {
-    temp_dir.as_ref().join(&wav_file_name(uuid))
-}
-
-fn wav_file_url_path(uuid: Uuid) -> String {
-    format!("{}/{}", WAV_FILES_URL_PATH_PREFIX, wav_file_name(uuid))
-}
+mod wav;
+mod wav_file;
 
 #[derive(Clone)]
 struct Context {
@@ -52,12 +40,12 @@ struct Query;
 #[graphql(context = Context)]
 impl Query {
     async fn wav_file_url(context: &Context, uuid: Uuid) -> Option<String> {
-        let wav_file_fs_path = wav_file_fs_path(&context.temp_dir, uuid);
+        let wav_file_fs_path = wav_file::fs_path(&context.temp_dir, uuid);
 
         fs::try_exists(&wav_file_fs_path)
             .await
             .unwrap()
-            .then(|| wav_file_url_path(uuid))
+            .then(|| wav_file::url_path(uuid))
     }
 }
 
@@ -71,13 +59,8 @@ async fn custom_graphql(
     JuniperResponse(request.execute(&*schema, &context).await)
 }
 
-async fn create_dummy_wav_file(temp_dir: &Path) {
-    fs::copy(
-        "/Users/jrosse/Downloads/M1F1-float32WE-AFsp.wav",
-        temp_dir.join("A52691A1-64AA-40C5-AEA8-9FD8C67230C4.wav"),
-    )
-    .await
-    .unwrap();
+fn create_dummy_wav_file(temp_dir: &TempDir) {
+    wav::write_wav_file(temp_dir);
 }
 
 #[tokio::main]
@@ -88,10 +71,10 @@ async fn main() {
 
     let context = Context::new(temp_dir.clone());
 
-    create_dummy_wav_file((*temp_dir).as_ref()).await;
+    create_dummy_wav_file(&temp_dir);
 
     let app = Router::new()
-        .nest_service(WAV_FILES_URL_PATH_PREFIX, ServeDir::new(&*temp_dir))
+        .nest_service(wav_file::URL_PATH_PREFIX, ServeDir::new(&*temp_dir))
         .route(
             "/graphql",
             on(MethodFilter::GET.or(MethodFilter::POST), custom_graphql),

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8.9"
+hound = "3.5.1"
 juniper = { version = "0.17.1", features = ["url", "uuid"] }
 juniper_axum = "0.3.0"
 tempdir = "0.3.7"
