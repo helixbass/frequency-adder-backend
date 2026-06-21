@@ -7,10 +7,10 @@ use axum::{
     routing::{get, on, MethodFilter},
     Extension, Router,
 };
-use juniper::{graphql_object, EmptyMutation, EmptySubscription, RootNode};
+use juniper::{graphql_object, EmptySubscription, RootNode};
 use juniper_axum::{extract::JuniperRequest, graphiql, response::JuniperResponse};
 use tempdir::TempDir;
-use tokio::{fs, net::TcpListener};
+use tokio::{fs, net::TcpListener, task::spawn_blocking};
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
@@ -49,7 +49,27 @@ impl Query {
     }
 }
 
-type Schema = RootNode<Query, EmptyMutation<Context>, EmptySubscription<Context>>;
+#[derive(Copy, Clone, Debug)]
+struct Mutation;
+
+#[graphql_object]
+#[graphql(context = Context)]
+impl Mutation {
+    async fn create_wav_file(context: &Context, frequency: f64) -> Uuid {
+        let uuid = Uuid::new_v4();
+
+        spawn_blocking({
+            let temp_dir = context.temp_dir.clone();
+            move || {
+                wav::write_wav_file(frequency as f32, &temp_dir, uuid);
+            }
+        });
+
+        uuid
+    }
+}
+
+type Schema = RootNode<Query, Mutation, EmptySubscription<Context>>;
 
 async fn custom_graphql(
     Extension(schema): Extension<Arc<Schema>>,
@@ -59,19 +79,13 @@ async fn custom_graphql(
     JuniperResponse(request.execute(&*schema, &context).await)
 }
 
-fn create_dummy_wav_file(temp_dir: &TempDir) {
-    wav::write_wav_file(temp_dir);
-}
-
 #[tokio::main]
 async fn main() {
-    let schema = Schema::new(Query, EmptyMutation::new(), EmptySubscription::new());
+    let schema = Schema::new(Query, Mutation, EmptySubscription::new());
 
     let temp_dir = Arc::new(TempDir::new("wav_files").expect("couldn't create temp dir"));
 
     let context = Context::new(temp_dir.clone());
-
-    create_dummy_wav_file(&temp_dir);
 
     let app = Router::new()
         .nest_service(wav_file::URL_PATH_PREFIX, ServeDir::new(&*temp_dir))
