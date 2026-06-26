@@ -55,8 +55,10 @@ fn get_max_abs_value(frequencies: &Frequencies) -> f32 {
 fn get_added_frequencies_value(sample_fraction: f32, frequencies: &Frequencies) -> f32 {
     frequencies
         .into_iter()
-        .map(|frequency| frequency.frequency as f32)
-        .map(|frequency| get_frequency_sin_amplitude(sample_fraction, frequency))
+        .map(|frequency| {
+            get_frequency_sin_amplitude(sample_fraction, frequency.frequency as f32)
+                * (frequency.magnitude as f32)
+        })
         .sum()
 }
 
