@@ -17,8 +17,11 @@ use tower_http::{
 };
 use uuid::Uuid;
 
+mod types;
 mod wav;
 mod wav_file;
+
+use types::Frequencies;
 
 #[derive(Clone)]
 struct Context {
@@ -55,13 +58,15 @@ struct Mutation;
 #[graphql_object]
 #[graphql(context = Context)]
 impl Mutation {
-    async fn create_wav_file(context: &Context, frequency: f64) -> Uuid {
+    async fn create_wav_file(context: &Context, frequencies: Frequencies) -> Uuid {
+        assert!(frequencies.len() <= 5);
+
         let uuid = Uuid::new_v4();
 
         spawn_blocking({
             let temp_dir = context.temp_dir.clone();
             move || {
-                wav::write_wav_file(frequency as f32, &temp_dir, uuid);
+                wav::write_wav_file(&frequencies, &temp_dir, uuid);
             }
         });
 
