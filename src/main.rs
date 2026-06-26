@@ -60,6 +60,7 @@ struct Mutation;
 impl Mutation {
     async fn create_wav_file(context: &Context, frequencies: Frequencies) -> Uuid {
         assert!(frequencies.len() <= 5);
+        assert!(frequencies.iter().all(|frequency| frequency.is_valid()));
 
         let uuid = Uuid::new_v4();
 
